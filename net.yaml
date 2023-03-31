@@ -1,0 +1,330 @@
+---
+Parameters:
+
+  Environment:
+    Description: "Environment Name" 
+    Type: String
+    
+  udacity:
+    Description: udacity Name
+    Type: String
+  
+  VPCCIDR:
+    Description: "VPC CIDR" 
+    Type: String
+    Default: 10.0.0.0/16
+  
+  PubSub1CIDR:
+    Description: "Public Subnet 1 CIDR - AZ-1" 
+    Type: String
+    Default: 10.0.0.0/24
+  
+  PubSub2CIDR:
+    Description: "Public Subnet 2 CIDR - AZ-2" 
+    Type: String
+    Default: 10.0.1.0/24
+  
+  PrivSub1CIDR:
+    Description: "Private Subnet 1 CIDR - AZ-1" 
+    Type: String
+    Default: 10.0.2.0/24
+  
+  PrivSub2CIDR:
+    Description: "Private Subnet 2 CIDR - AZ-2" 
+    Type: String
+    Default: 10.0.3.0/24
+   
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true
+      Tags:
+        - Key: udacity
+          Value: !Ref udacity
+
+  PubSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PubSub1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet AZ2
+        - Key: udacity
+          Value: !Ref udacity
+
+  PubSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PubSub2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet AZ2
+        - Key: udacity
+          Value: !Ref udacity
+
+  PrivSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivSub1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet AZ1
+        - Key: udacity
+          Value: !Ref udacity
+          
+  PrivSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivSub2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet AZ2
+        - Key: udacity  
+          Value: !Ref udacity
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-IGW
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: udacity
+          Value: !Ref udacity
+
+  IGWAtt:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+
+
+  NAT1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAtt
+    Properties:
+        Domain: vpc
+
+  NAT2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAtt
+    Properties:
+        Domain: vpc
+
+
+  natgetway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NAT1EIP.AllocationId
+      SubnetId: !Ref PubSub1
+      Tags:
+        - Key: Name
+          Value: NAT GateWay1
+        - Key: udacity
+          Value: !Ref udacity
+
+  NatGetway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NAT2EIP.AllocationId
+      SubnetId: !Ref PubSub2
+      Tags:
+        - Key: Name
+          Value: NAT GateWay2
+        - Key: udacity
+          Value: !Ref udacity
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public Route Table
+        - Key: udacity
+          Value: !Ref udacity
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+  
+
+  PubSub1RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSub1
+      RouteTableId: !Ref PublicRouteTable
+
+
+  PubSub2RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSub2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table
+        - Key: udacity
+          Value: !Ref udacity
+
+  PrivRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref natgetway1
+
+
+  PrivRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table
+        - Key: udacity
+          Value: !Ref udacity
+
+  PrivRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGetway2
+
+
+
+  PrivSub1RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSub1
+      RouteTableId: !Ref PrivRouteTable1
+ 
+  PrivSub2RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSub2
+      RouteTableId: !Ref PrivRouteTable2
+
+  loadbalancersg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${udacity}-loadbalancersg
+      VpcId: !Ref VPC
+
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Load Balancer Security Group
+        - Key: udacity  
+          Value: !Ref udacity
+
+  P2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SG
+      GroupDescription: Application Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref loadbalancersg
+      Tags: 
+        - Key: Name
+          Value: !Sub ${Environment}-P2SG
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: udacity
+          Value: !Ref udacity
+
+
+Outputs:
+
+  VPC:
+    Description: "VPC ID" 
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${udacity}-VPCID
+
+  Pubsubs:
+    Description: "Public Subnets" 
+    Value: !Join [ ",", [ !Ref PubSub1, !Ref PubSub2 ] ]
+    Export:
+      Name: !Sub ${udacity}-PubSubs-IDs
+
+  PubSub1CIDR:
+    Description: "Public Subnet 1 CIDR" 
+    Value: !Ref PubSub1CIDR
+    Export:
+      Name: !Sub ${udacity}-PubSub1CIDR
+  
+  PubSub2CIDR:
+    Description: "Public Subnet 2 CIDR" 
+    Value: !Ref PubSub2CIDR
+    Export:
+      Name: !Sub ${udacity}-PubSub2CIDR
+
+
+  PubSub1:
+    Description: "Public Subnet 1 ID" 
+    Value: !Ref PubSub1
+    Export:
+      Name: !Sub ${udacity}-PubSub1ID
+
+  PubSub2:
+    Description: "Public Subnet 2 ID" 
+    Value: !Ref PubSub2
+    Export:
+      Name: !Sub ${udacity}-PubSub2ID
+
+  PrivSubs:
+    Description: "Private Subnets" 
+    Value: !Join [ ",", [ !Ref PrivSub1, !Ref PrivSub2 ] ]
+    Export:
+      Name: !Sub ${udacity}-PrivSubsIDs
+
+  loadbalancersg:
+    Description: "Load Balancer Security Group" 
+    Value: !Ref loadbalancersg
+    Export:
+      Name: !Sub ${udacity}-loadbalancersgID
+  
+  P2SG:
+    Description: "Application Security Group" 
+    Value: !Ref P2SG
+    Export:
+      Name: !Sub ${udacity}-P2SGID  
